@@ -10,6 +10,7 @@ response_adapters:
   - default_planning_response_adapters/ValidateSolution
   - default_planning_response_adapters/DisplayMotionPath
 start_state_max_bounds_error: 0.1
+default_planner_config: TRRT
 planner_configs:
   SBL:
     type: geometric::SBL
@@ -158,6 +159,7 @@ tmr_arm:
     - LazyPRMstar
     - SPARS
     - SPARStwo
+  default_planner_config: TRRT
 enforce_constrained_state_space: True
 projection_evaluator: joints(joint_1, joint_6)
 longest_valid_segment_fraction: 0.05

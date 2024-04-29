@@ -1,5 +1,6 @@
 import os
 import sys
+from pathlib import Path
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
@@ -13,22 +14,37 @@ def generate_launch_description():
         while i < len(sys.argv):
             args.append(sys.argv[i])
             i = i + 1
-            
+    
+    launch_arguments = {
+        "use_fake_hardware": "true",
+        "gripper": "",
+        "dof": "6",
+    }
+    
+    warehouse_ros_config = {
+        "warehouse_plugin": "warehouse_ros_sqlite::DatabaseConnection",
+        "warehouse_host": get_package_share_directory('tm_moveit_cpp_demo')+ "/config/warehouse_db.sqlite",
+    }
+    
+    moveit_cpp_yaml_file_name = get_package_share_directory('tm_moveit_cpp_demo') + "/config/moveit_cpp.yaml"
     
     moveit_config = (
-        MoveItConfigsBuilder(robot_name="tm5-900")
-        .robot_description(
-            file_path="config/tm5-900.urdf.xacro"
-        )
-        .robot_description_semantic(file_path="config/tm5-900.srdf")
-        .trajectory_execution(file_path="config/gripper_moveit_controllers.yaml")
-        .joint_limits(file_path="config/joint_limits.yaml")
+        MoveItConfigsBuilder(
+                "tm5-900", package_name="tm5-900_moveit_config"
+            )
+        .robot_description(mappings=launch_arguments)
+        .trajectory_execution(file_path="config/moveit_controllers.yaml")
+        .planning_scene_monitor(
+                publish_robot_description=True, publish_robot_description_semantic=True
+            )
         .planning_pipelines(
-            default_planning_pipeline="ompl",
-            pipelines=["ompl"]
-        )
+                pipelines=["ompl", "pilz_industrial_motion_planner"],
+                default_planning_pipeline="ompl",
+                load_all=False
+            )
         .to_moveit_configs()
     )
+    
 
     # Start the actual move_group node/action server
     move_group_node = Node(
@@ -36,13 +52,10 @@ def generate_launch_description():
         executable="move_group",
         output="screen",
         parameters=[
-            moveit_config.to_dict(),
-            moveit_config.joint_limits,
-            moveit_config.robot_description,
-            moveit_config.planning_pipelines,
             {"use_sim_time": True},
+            moveit_config.to_dict(),
+            warehouse_ros_config,
             ],
-        arguments=["--ros-args", "--log-level", "info"],
     )
     
     # RViz
@@ -62,6 +75,7 @@ def generate_launch_description():
             moveit_config.joint_limits,
             moveit_config.planning_pipelines,
             moveit_config.robot_description_kinematics,
+            warehouse_ros_config,
         ],
     )
 
@@ -71,7 +85,7 @@ def generate_launch_description():
         executable='static_transform_publisher',
         name='static_transform_publisher',
         output='log',
-        arguments=['0.0', '0.0', '0.0', '0.0', '0.0', '0.0', 'world', 'base']
+        arguments=["--frame-id", "world", "--child-frame-id", "base"],
     )
 
     # Publish TF
@@ -84,9 +98,9 @@ def generate_launch_description():
     )
     
     ros2_controllers_path = os.path.join(
-        get_package_share_directory("tm_moveit_cpp_demo"),
+        get_package_share_directory("tm5-900_moveit_config"),
         "config",
-        "controllers.yaml",
+        "ros2_controllers.yaml",
     )
     ros2_control_node = Node(
         package="controller_manager",
@@ -102,9 +116,20 @@ def generate_launch_description():
     tm_driver_node = Node(
         package='tm_driver',
         executable='tm_driver',
-        #name='tm_driver',
+        name='tm_driver',
         output='screen',
         arguments=args
+    )
+    
+    camera_calibrator_node = Node(
+        package='tm5_900_camera_calibrator',
+        executable='camera_calibrator',
+        name='moveit_py',
+        output='screen',
+        parameters=[
+            moveit_config.to_dict(),
+            moveit_cpp_yaml_file_name,
+        ]
     )
 
     return LaunchDescription([
@@ -113,5 +138,6 @@ def generate_launch_description():
                               robot_state_publisher, 
                               rviz_node, 
                               move_group_node,
-                              ros2_control_node,
+                              #ros2_control_node,
+                              camera_calibrator_node,
                               ])

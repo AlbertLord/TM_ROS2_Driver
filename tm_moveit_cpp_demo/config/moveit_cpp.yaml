@@ -1,4 +1,4 @@
-run_moveit_cpp:
+moveit_py:
   ros__parameters:
     planning_scene_monitor_options:
       name: "planning_scene_monitor"
@@ -16,5 +16,7 @@ run_moveit_cpp:
     plan_request_params:
       planning_attempts: 10
       planning_pipeline: ompl
+      planner_id: "TRRT"
       max_velocity_scaling_factor: 1.0
       max_acceleration_scaling_factor: 1.0
+      planning_time: 1.0
